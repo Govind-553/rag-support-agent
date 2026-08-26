@@ -2,12 +2,16 @@
 __pycache__/
 *.pyc 
 
-# Environment variables optional for this project
+# Environment variables for hugging-face transformers models [name, version]
 .env 
 
-# python virtual environment
+# Python virtual environment
 ragenv/
 
 # IDE files
 .idea/
 .vscode/
+
+# Results of evaluation 
+evaluation/results.json
+evaluation/evaluation_report.html

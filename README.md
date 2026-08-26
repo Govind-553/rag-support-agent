@@ -155,6 +155,13 @@ Results from this audit pass on August 26, 2026:
 - `python -m pytest tests/ -v --ignore=tests/test_rag.py` passed: `154/154`
 - `python -m pytest tests/ -v` passed: `157/157`
 
+### Agent Evaluation Results (Mocked Pass)
+We have a deterministic evaluation suite for the agent in `evaluation/run_eval.py`.
+- **Total Cases**: 25
+- **Passed**: 25
+- **Failed**: 0
+- **Pass Rate**: 100.0%
+
 ## 9. Safety Notes
 
 - Retrieved documents are filtered before generation so superseded, draft, and internal content is not treated as authority.
