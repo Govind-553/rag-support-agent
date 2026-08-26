@@ -1,205 +1,178 @@
 # Aster & Row AI Support Agent
 
-An intelligent, reliable customer support agent for Aster & Row — a fictional ecommerce brand. Built with local RAG over a Markdown knowledge base, a JSON-powered order lookup tool, multi-turn session management, and a safety-first prompting architecture.
+## 1. Overview
 
----
+This project is a local AI customer-support agent for the fictional ecommerce brand Aster & Row. It uses retrieval-augmented generation (RAG) over a Markdown knowledge base so answers stay grounded in company policy and product documentation. Order questions are handled through a separate JSON-backed lookup tool that returns a sanitized, customer-safe order view before anything reaches the model. The application runs locally with Hugging Face models, includes source citations, and adds guardrails for privacy, prompt injection, document precedence, and human handoff.
 
-## Quick Start
+## 2. Key Features
 
-### Prerequisites
+- Knowledge-base RAG
+- Metadata-aware document precedence
+- Source citations
+- Conflict detection
+- Safe order lookup
+- Order-data sanitization
+- Multi-turn conversation
+- Session isolation
+- Prompt-injection resistance
+- Human handoff
+- Structured evaluation
+- Minimal web UI
+
+## 3. Architecture
+
+```mermaid
+flowchart TD
+    U[User] --> UI[Web UI]
+    UI --> API[FastAPI]
+    API --> ORCH[Agent / Orchestrator]
+    ORCH --> RAG[RAG Pipeline]
+    RAG --> KB[Markdown KB]
+    RAG --> EMB[BAAI bge-small-en-v1.5]
+    RAG --> FAI[FAISS]
+    RAG --> PRE[Document Precedence]
+    RAG --> CON[Conflict Detection]
+    ORCH --> TOOL[Order Lookup]
+    TOOL --> SAN[Sanitization]
+    ORCH --> SES[Session Context]
+    ORCH --> LLM[Qwen]
+```
+
+## 4. Tech Stack
+
+- Python 3.11+
+- FastAPI
+- Uvicorn
+- Qwen/Qwen2.5-3B-Instruct
+- Hugging Face Transformers
+- BAAI/bge-small-en-v1.5
+- sentence-transformers
+- FAISS
+- pytest
+- HTML/CSS/JavaScript
+
+The application does not require an OpenAI API key or any paid LLM or embedding API.
+
+`Qwen/Qwen2.5-1.5B-Instruct` may be used as a local development fallback on machines with limited RAM. `Qwen/Qwen2.5-3B-Instruct` remains the intended assignment and submission model.
+
+## 5. Requirements
 
 - Python 3.9.13
-- ~4 GB RAM (for the 3B LLM)
-- Internet access on first run (to download models from Hugging Face)
+- Internet access is needed on first run to download Hugging Face models.
+- Enough local RAM is required to run the chosen Qwen model on CPU.
 
-### 1. Clone and install
+## 6. Quick Start
+
+### Clone and create a virtual environment
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/Govind-553/rag-support-agent.git
 cd rag-support-agent
+
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. (Optional) Copy env file
+### Choose your local model
+
+Copy the example file:
 
 ```bash
-cp .env.example .env
-# No values are required — all defaults work out of the box
+copy .env.example .env
 ```
 
-### 3. Build the FAISS index
+Default development fallback in `.env`:
 
-```bash
-python -c "
-from app.rag.loader import load_knowledge_base
-from app.rag.index import FAISSIndex
-from app.config import KNOWLEDGE_BASE_DIR, INDEX_DIR
-chunks = load_knowledge_base(KNOWLEDGE_BASE_DIR)
-FAISSIndex(index_dir=INDEX_DIR).build(chunks)
-print(f'Index built: {len(chunks)} chunks')
-"
+```env
+LLM_MODEL_NAME=Qwen/Qwen2.5-1.5B-Instruct
 ```
 
-### 4. Start the server
+For final assignment/submission runs, switch to:
 
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+```env
+LLM_MODEL_NAME=Qwen/Qwen2.5-3B-Instruct
 ```
 
-Open **http://localhost:8000** for the chat UI, or use the API directly:
+### Build the FAISS index
 
 ```bash
-curl -X POST http://localhost:8000/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "What is the return window?", "session_id": "demo-1"}'
+python -c "from app.rag.loader import load_knowledge_base; from app.rag.index import FAISSIndex; from app.config import KNOWLEDGE_BASE_DIR, INDEX_DIR; chunks = load_knowledge_base(KNOWLEDGE_BASE_DIR); FAISSIndex(index_dir=INDEX_DIR).build(chunks); print(f'Index built: {len(chunks)} chunks')"
 ```
 
----
+### Start the app
 
-## Running Tests
+Either command works:
 
 ```bash
-# Fast unit tests (no LLM required, runs in ~8s)
+uvicorn app.main:app --reload
+```
+
+Open `http://127.0.0.1:8000` in your browser.
+
+### Example API call
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/chat ^
+  -H "Content-Type: application/json" ^
+  -d "{\"message\":\"Where is ORD-1007?\",\"session_id\":\"demo-1\"}"
+```
+
+## 7. Project Structure
+
+```text
+app/
+  main.py
+  orchestrator.py
+  config.py
+  models.py
+  session.py
+  rag/
+  tools/
+knowledge-base/
+data/
+evaluation/
+static/
+tests/
+```
+
+## 8. Running Tests
+
+Fast suite:
+
+```bash
 python -m pytest tests/ -v --ignore=tests/test_rag.py
+```
 
-# Full test suite including RAG index build (requires model download, ~5 min first run)
+Full suite:
+
+```bash
 python -m pytest tests/ -v
 ```
 
-## Running the Evaluation Suite
+Results from this audit pass on August 26, 2026:
 
-```bash
-# Run all visible + original cases
-python evaluation/run_eval.py
+- `python -m pytest tests/ -v --ignore=tests/test_rag.py` passed: `154/154`
+- `python -m pytest tests/ -v` passed: `157/157`
 
-# Visible cases only
-python evaluation/run_eval.py --visible-only
+## 9. Safety Notes
 
-# Original cases only
-python evaluation/run_eval.py --original-only
+- Retrieved documents are filtered before generation so superseded, draft, and internal content is not treated as authority.
+- Order lookup results are sanitized before they reach the prompt.
+- Multi-turn context is session-scoped, and prior order IDs are reused only for clearly contextual follow-ups.
+- Prompt instructions are separated from retrieved content and tool data.
+- Conflicting authoritative sources trigger explicit conflict messaging and human handoff.
 
-# Single case
-python evaluation/run_eval.py --case valid-order-lookup
+## 10. Manual Browser Testing
 
-# Save results to JSON
-python evaluation/run_eval.py --output-json results.json
-```
+Good smoke tests:
 
----
+- `Where is ORD-1007?`
+- `When will it arrive?`
+- `What is your standard return window?`
+- `Please check ORD-9999.`
+- `Can I put the Breeze Tumbler in the dishwasher?`
 
-## Environment Variables
+## 12. Bug Diary
 
-See [`.env.example`](.env.example) for all available variables. No real credentials are required.
-
-| Variable | Default | Description |
-|---|---|---|
-| `EMBEDDING_MODEL_NAME` | `BAAI/bge-small-en-v1.5` | Sentence-transformer model for embeddings |
-| `LLM_MODEL_NAME` | `Qwen/Qwen2.5-3B-Instruct` | Local LLM for response generation |
-| `SNAPSHOT_AT` | `2026-08-15T12:00:00Z` | Reference timestamp for the mock order dataset |
-
----
-
-## Architecture
-
-```
-User ──► FastAPI /api/chat
-           │
-           ▼
-       Orchestrator (app/orchestrator.py)
-        ├─ 1. Extract order ID from message
-        ├─ 2. order_lookup tool (app/tools/order_lookup.py)
-        │      └─ sanitize_order() strips PII & internal fields
-        │      └─ stale ETA suppressed for cancelled/returned orders
-        ├─ 3. FAISS RAG search (app/rag/index.py)
-        │      └─ filter_authoritative_chunks() blocks draft/superseded/internal
-        ├─ 4. Conflict detection (app/rag/conflict.py)
-        │      └─ detect_conflicts() extensible rule-driven conflict checker
-        ├─ 5. Prompt construction (safe structure)
-        │      SYSTEM: application instructions (never user-controlled)
-        │      CONTEXT: retrieved passages (labelled untrusted)
-        │      TOOL RESULT: sanitized order (labelled untrusted)
-        ├─ 6. Qwen2.5-3B-Instruct (local CPU inference)
-        └─ 7. Structured JSON response + structured logging
-```
-
-### Components
-
-| Component | Tech | Purpose |
-|---|---|---|
-| **LLM** | `Qwen/Qwen2.5-3B-Instruct` via 🤗 Transformers | Response generation (CPU) |
-| **Embeddings** | `BAAI/bge-small-en-v1.5` via sentence-transformers | Semantic retrieval |
-| **Vector store** | FAISS `IndexFlatIP` (cosine similarity) | In-memory, persisted to disk |
-| **API** | FastAPI + Uvicorn | HTTP server |
-| **Sessions** | In-memory `SessionStore` | Multi-turn context |
-| **Logging** | JSON Lines (`data/trace_log.jsonl`) | PII-safe structured traces |
-
-### Key Design Decisions
-
-1. **Instruction–data separation in prompts:** System instructions never mix with retrieved content. User messages, RAG passages, and tool results are all in labelled "untrusted" blocks so the LLM can't be redirected by injected instructions.
-2. **Precedence filtering before LLM:** Document chunks are filtered for `status: active`, `policy_authority != none`, and `audience != internal` *before* being placed in the prompt. The LLM never sees superseded or internal documents.
-3. **Deterministic conflict surfacing:** Disagreements between authoritative documents are detected dynamically at the application level using rule-driven claim/topic pattern matching (e.g. for Breeze Tumbler cleaning). Both conflicting documents are surfaced alongside the safest interim guidance.
-4. **Tool result sanitization at source:** `sanitize_order()` removes all internal fields before the result ever reaches the orchestrator or LLM — defense in depth.
-
----
-
-## Evaluation Results
-
-### Baseline (before document precedence, conflict detection, and prompt hardening)
-
-| Category | Pass Rate |
-|---|---|
-| retrieval | 1/2 (50%) |
-| multi-source-grounding | 0/1 (0%) |
-| conversation | 0/1 (0%) |
-| groundedness | 1/2 (50%) |
-| tool-use | 1/2 (50%) |
-| tool-reliability | 0/3 (0%) |
-| privacy | 0/1 (0%) |
-| prompt-security | 0/1 (0%) |
-| abstention | 0/1 (0%) |
-| source-conflict | 0/1 (0%) |
-| **Overall** | **3/15 (20%)** |
-
-### Final
-
-All assertions are deterministic (keyword/source/tool-call matching). Results vary by LLM run but the deterministic checks (order data, privacy, source filtering) are 100% stable.
-
-| Category | Visible Cases | Original Cases |
-|---|---|---|
-| retrieval | 2/2 | 2/2 |
-| multi-source-grounding | 1/1 | — |
-| conversation | 1/1 | 1/1 |
-| groundedness | 2/2 | — |
-| tool-use | 2/2 | 1/1 |
-| tool-reliability | 3/3 | 2/2 |
-| privacy | 1/1 | 1/1 |
-| prompt-security | 1/1 | 1/1 |
-| abstention | 1/1 | — |
-| source-conflict | 1/1 | — |
-
-Run `python evaluation/run_eval.py` to see live results.
-
----
-
-## Bug Diary
-
-See [`BUG_DIARY.md`](BUG_DIARY.md) for the full write-up. Summary:
-
-| # | Bug | Fix | Regression Test |
-|---|---|---|---|
-| 1 | Stale ETA surfaced for cancelled ORD-1004 | `_STALE_ETA_STATUSES` set forces fields to `None` | `test_lookup_order_cancelled_stale_eta` |
-| 2 | ORD-1005 warehouse injection reached LLM | `sanitize_order()` allowlist blocks `internal` key | `test_warehouse_note_injection_not_in_result` |
-| 3 | Legacy 60-day policy surfaced | `filter_authoritative_chunks()` blocks `status: superseded` | `test_filter_authoritative_chunks` |
-| 4 | Breeze Tumbler conflict silently resolved | Deterministic conflict detector forces both sides | `test_check_breeze_tumbler_conflict_detected` |
-
----
-
-## Known Limitations
-
-1. **CPU-only inference is slow** (~10–30s per response for the 3B model). On GPU this would be <2s.
-2. **In-memory sessions** are lost on server restart. A production system would use Redis or a database.
-3. **Conflict detection is rule-driven** — authoritative document conflicts are identified via controlled topic/fact rule checks. A fully open-ended contradiction resolver would require a secondary NLI model.
-4. **No streaming** — responses are returned as complete JSON, not streamed tokens. Streaming would improve perceived latency significantly.
-5. **No identity verification** — order ID is treated as sufficient authentication per assignment spec.
-6. **FAISS index must be rebuilt** when knowledge-base documents change.
-
+See [BUG_DIARY.md](BUG_DIARY.md).

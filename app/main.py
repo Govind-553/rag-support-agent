@@ -1,15 +1,19 @@
 """
-FastAPI entrypoint — Aster & Row AI Support Agent
+FastAPI entrypoint - Aster & Row AI Support Agent
 """
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
+import sys
 import uuid
-import os
 from pathlib import Path
 
-from app.models import ChatRequest, ChatResponse, SourceCitation
-from app.logging.logger import logger
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+from app.config import STATIC_DIR
+from app.models import ChatRequest, ChatResponse
 from app.session import session_store
 from app.orchestrator import run_turn
 
@@ -51,7 +55,11 @@ def chat(request: ChatRequest):
     )
 
 
-# Serve static files if index.html exists
-static_path = Path("c:/Users/choud/rag-support-agent/static")
-if static_path.exists():
-    app.mount("/", StaticFiles(directory=str(static_path), html=True), name="static")
+if STATIC_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=False)
