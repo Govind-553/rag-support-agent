@@ -10,7 +10,7 @@ INDEX_DIR = DATA_DIR / "faiss_index"
 
 # Model configuration
 EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
-LLM_MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
+LLM_MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
 
 # Snapshot timestamp for cancellation/time window logic
 SNAPSHOT_AT = "2026-08-15T12:00:00Z"

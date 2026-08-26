@@ -47,11 +47,15 @@ def _get_orders() -> Dict[str, Any]:
 
 
 def normalize_order_id(raw: str) -> str:
-    """Normalizes an order ID: strip whitespace, uppercase, ensure ORD- prefix pattern."""
+    """Normalizes an order ID: strip whitespace, uppercase, handle space/hyphen separators."""
     normalized = raw.strip().upper()
-    # Allow ORD-NNNN or just digits like 1007 → ORD-1007
-    if re.match(r"^\d+$", normalized):
-        normalized = f"ORD-{normalized}"
+    
+    if normalized.startswith("ORD"):
+        rest = normalized[3:].strip()
+        rest = re.sub(r"^[-_\s]+", "", rest)
+        if re.match(r"^\d+$", rest):
+            return f"ORD-{rest}"
+            
     return normalized
 
 

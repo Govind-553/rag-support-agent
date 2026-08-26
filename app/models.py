@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 class ChatMessage(BaseModel):
     role: str  # "user" or "assistant"
@@ -19,3 +19,6 @@ class ChatResponse(BaseModel):
     handoff: bool
     trace_id: str
     tool_used: bool
+    handoff_reason: Optional[str] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+

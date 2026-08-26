@@ -19,7 +19,23 @@ def test_normalize_order_id_whitespace():
 
 
 def test_normalize_order_id_digits_only():
-    assert normalize_order_id("1007") == "ORD-1007"
+    # 5. Silently converting arbitrary digits is disabled
+    assert normalize_order_id("1007") == "1007"
+
+
+def test_normalize_order_id_separator():
+    # Allowed separator normalization (space, underscore, hyphen)
+    assert normalize_order_id("ORD 1007") == "ORD-1007"
+    assert normalize_order_id("ORD_1007") == "ORD-1007"
+    assert normalize_order_id("ord-1007") == "ORD-1007"
+    assert normalize_order_id("ORD1007") == "ORD-1007"
+
+
+def test_normalize_order_id_malformed():
+    # Malformed ID should not be incorrectly guessed/fixed
+    assert normalize_order_id("ORD-XYZ") == "ORD-XYZ"
+    assert normalize_order_id("ORD-100") == "ORD-100"
+    assert normalize_order_id("ABC-1234") == "ABC-1234"
 
 
 def test_extract_order_id_plain():
@@ -32,6 +48,8 @@ def test_extract_order_id_lowercase():
 
 def test_extract_order_id_none():
     assert extract_order_id("What is your return policy?") is None
+    # Standing arbitrary number should not extract as order ID
+    assert extract_order_id("Where is 1007?") is None
 
 
 def test_lookup_order_valid():

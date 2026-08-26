@@ -8,7 +8,7 @@ An intelligent, reliable customer support agent for Aster & Row — a fictional 
 
 ### Prerequisites
 
-- Python 3.9+
+- Python 3.9.13
 - ~4 GB RAM (for the 3B LLM)
 - Internet access on first run (to download models from Hugging Face)
 
@@ -113,7 +113,7 @@ User ──► FastAPI /api/chat
         ├─ 3. FAISS RAG search (app/rag/index.py)
         │      └─ filter_authoritative_chunks() blocks draft/superseded/internal
         ├─ 4. Conflict detection (app/rag/conflict.py)
-        │      └─ Breeze Tumbler cleaning conflict surfaced explicitly
+        │      └─ detect_conflicts() extensible rule-driven conflict checker
         ├─ 5. Prompt construction (safe structure)
         │      SYSTEM: application instructions (never user-controlled)
         │      CONTEXT: retrieved passages (labelled untrusted)
@@ -137,7 +137,7 @@ User ──► FastAPI /api/chat
 
 1. **Instruction–data separation in prompts:** System instructions never mix with retrieved content. User messages, RAG passages, and tool results are all in labelled "untrusted" blocks so the LLM can't be redirected by injected instructions.
 2. **Precedence filtering before LLM:** Document chunks are filtered for `status: active`, `policy_authority != none`, and `audience != internal` *before* being placed in the prompt. The LLM never sees superseded or internal documents.
-3. **Deterministic conflict surfacing:** The Breeze Tumbler cleaning conflict is detected by inspecting retrieved filenames, not by asking the LLM to decide. This prevents silent resolution.
+3. **Deterministic conflict surfacing:** Disagreements between authoritative documents are detected dynamically at the application level using rule-driven claim/topic pattern matching (e.g. for Breeze Tumbler cleaning). Both conflicting documents are surfaced alongside the safest interim guidance.
 4. **Tool result sanitization at source:** `sanitize_order()` removes all internal fields before the result ever reaches the orchestrator or LLM — defense in depth.
 
 ---
@@ -198,7 +198,7 @@ See [`BUG_DIARY.md`](BUG_DIARY.md) for the full write-up. Summary:
 
 1. **CPU-only inference is slow** (~10–30s per response for the 3B model). On GPU this would be <2s.
 2. **In-memory sessions** are lost on server restart. A production system would use Redis or a database.
-3. **Single-domain conflict detection** — only the Breeze Tumbler cleaning conflict is explicitly handled. A general conflict resolver would require comparing semantic similarity across all active sources.
+3. **Conflict detection is rule-driven** — authoritative document conflicts are identified via controlled topic/fact rule checks. A fully open-ended contradiction resolver would require a secondary NLI model.
 4. **No streaming** — responses are returned as complete JSON, not streamed tokens. Streaming would improve perceived latency significantly.
 5. **No identity verification** — order ID is treated as sufficient authentication per assignment spec.
 6. **FAISS index must be rebuilt** when knowledge-base documents change.

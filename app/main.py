@@ -46,6 +46,8 @@ def chat(request: ChatRequest):
         handoff=result["handoff"],
         trace_id=result["trace_id"],
         tool_used=result["tool_used"],
+        handoff_reason=result.get("handoff_reason"),
+        tool_calls=result.get("tool_calls"),
     )
 
 

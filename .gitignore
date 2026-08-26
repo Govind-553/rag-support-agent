@@ -2,8 +2,8 @@
 __pycache__/
 *.pyc 
 
-# Environment variables
-.env
+# Environment variables optional for this project
+.env 
 
 # IDE files
 .idea/

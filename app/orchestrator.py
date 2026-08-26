@@ -169,34 +169,87 @@ def _call_llm(system: str, history_text: str, context_block: str, tool_block: st
     return str(generated).strip()
 
 
-# ---------------------------------------------------------------------------
-# Handoff detection heuristics
-# ---------------------------------------------------------------------------
-_HANDOFF_TRIGGERS = [
-    "human", "agent", "escalat", "contact support", "cannot assist",
-    "conflict", "disagree", "unable to confirm", "i cannot complete",
-    "recommend", "please reach", "human confirmation"
-]
-
-_HANDOFF_CATEGORIES = {
-    "exception": True,
-    "damaged": True,
-    "conflict": True,
-    "unknown": True,
-    "vegan": True,  # Abstention case
-}
-
-
-def _should_handoff(answer: str, has_conflict: bool, order_result: Optional[Dict]) -> bool:
-    """Determines if this response warrants a human handoff flag."""
+def determine_handoff_reason(
+    user_message: str,
+    has_conflict: bool,
+    order_result: Optional[Dict]
+) -> Optional[str]:
+    # 1. Genuine Conflict:
     if has_conflict:
-        return True
+        return "conflict"
+
+    # 2. Unknown order:
+    if order_result and not order_result.get("found"):
+        return "unknown_order"
+
+    # 3. Order Exception:
     if order_result and order_result.get("found"):
-        status = order_result["order"].get("status", "")
+        status = order_result["order"].get("status", "").lower()
         if status == "exception":
-            return True
-    answer_lower = answer.lower()
-    return any(t in answer_lower for t in _HANDOFF_TRIGGERS)
+            return "order_exception"
+
+    msg_lower = user_message.lower().strip()
+
+    # Detect prompt injection
+    is_prompt_injection = any(kw in msg_lower for kw in ("ignore the real policy", "ignore prior", "ignore instructions", "system prompt", "hidden prompt", "repeat your system", "verbatim"))
+
+    # 4. Privacy / Internal Data Request:
+    privacy_request_keywords = [
+        "email", "address", "internal note", "risk score", "warehouse note", "support tag", "credentials",
+        "another customer", "customer's shipping", "customer's email"
+    ]
+    if any(kw in msg_lower for kw in privacy_request_keywords):
+        is_policy_query = any(k in msg_lower for k in ("policy", "how to", "how long", "what is your"))
+        if not is_policy_query:
+            return "privacy_request"
+
+    # 5. Unsupported Action:
+    action_keywords = [
+        "please cancel", "cancel my order", "cancel this order", "cancel ord-", "i want to cancel", "i need to cancel", "can you cancel",
+        "i'd like to cancel", "i would like to cancel", "like to cancel",
+        "refund my", "please refund", "i want a refund", "process a refund", "cancellation of", "cancel my",
+        "replace my", "please replace", "send a replacement", "i want a replacement",
+        "change my address", "change the address", "update my address", "update shipping address",
+        "price match", "price adjustment",
+        "damaged", "broken", "defective", "wrong item", "arrived damaged", "broken zipper"
+    ]
+    is_policy_query = any(k in msg_lower for k in ("after it", "policy", "how long", "how many days", "is there a deadline", "can i return", "can i cancel my order after", "what is the return window"))
+    if any(kw in msg_lower for kw in action_keywords) and not is_policy_query and not is_prompt_injection:
+        return "unsupported_action"
+
+    # 6. Insufficient Knowledge Base Information:
+    insufficient_keywords = ["vegan", "fabrics", "adhesives", "animal products", "sustainable", "organic"]
+    if any(kw in msg_lower for kw in insufficient_keywords):
+        return "insufficient_information"
+
+    return None
+
+
+def is_contextual_order_reference(message: str) -> bool:
+    msg_lower = message.lower()
+    ref_phrases = [
+        "my order", "that order", "this order", "the order",
+        "my package", "that package", "this package", "the package",
+        "my parcel", "that parcel", "this parcel", "the parcel",
+        "status of that", "status of this", "track that", "track this",
+        "when will it arrive", "where is it", "status of it", "track it", "tracking it",
+        "cancel it", "cancellation of it", "arrive", "its status", "status of that",
+        "the status", "any tracking", "any update",
+    ]
+    tracking_context = any(w in msg_lower for w in ["track", "where", "status", "cancel", "delivery", "arrive", "when", "ship", "dispatch", "update"])
+    pronouns = any(w in msg_lower.split() for w in ["it", "its", "that", "this"])
+    return any(phrase in msg_lower for phrase in ref_phrases) or (tracking_context and pronouns)
+
+def is_order_intent_message(message: str) -> bool:
+    msg_lower = message.lower()
+    order_intent_phrases = [
+        "order status", "track my order", "where is my order", "cancel my order",
+        "cancellation of my order", "my package status", "status of my package",
+        "where is my package", "when will my order", "when is my order",
+        "cancellation of", "cancel my", "refund my", "replace my", "change my address",
+        "update my address", "update shipping address", "price match", "price adjustment"
+    ]
+    return any(phrase in msg_lower for phrase in order_intent_phrases)
 
 
 # ---------------------------------------------------------------------------
@@ -214,34 +267,38 @@ def run_turn(
     tool_used = False
     order_result = None
     sources: List[SourceCitation] = []
+    tool_calls = []
 
     # -----------------------------------------------------------------------
-    # Step 1: Detect if we need an order lookup
+    # Step 1: Detect if we need an order lookup (Routing context resolution)
     # -----------------------------------------------------------------------
     order_id_from_msg = extract_order_id(user_message)
-    order_id = order_id_from_msg or session.last_order_id
-
-    # Only call order lookup if:
-    # - There's an explicit order ID in the message, OR
-    # - The user seems to be asking about order status/shipping and session has a prior order
-    needs_order = order_id_from_msg is not None or (
-        order_id is not None and
-        any(kw in user_message.lower() for kw in [
-            "order", "where", "arrive", "ship", "track", "status", "when",
-            "cancel", "deliver", "package", "parcel"
-        ])
-    )
+    
+    if order_id_from_msg is not None:
+        order_id = order_id_from_msg
+        needs_order = True
+    elif session.last_order_id is not None and is_contextual_order_reference(user_message):
+        order_id = session.last_order_id
+        needs_order = True
+    elif is_order_intent_message(user_message):
+        order_id = None
+        needs_order = True
+    else:
+        order_id = None
+        needs_order = False
 
     if needs_order and order_id:
         order_result = lookup_order(order_id)
         tool_used = True
+        tool_calls.append({
+            "tool": "order_lookup",
+            "arguments": {
+                "order_id": order_id
+            },
+            "found": order_result["found"]
+        })
         if order_result["found"]:
             session.last_order_id = order_id
-    elif not order_id and any(kw in user_message.lower() for kw in [
-        "where is my order", "track my order", "order status"
-    ]):
-        # Missing order ID — will be handled in the system prompt; don't call tool
-        pass
 
     # -----------------------------------------------------------------------
     # Step 2: RAG retrieval
@@ -316,7 +373,8 @@ def run_turn(
     # -----------------------------------------------------------------------
     # Step 7: Determine handoff
     # -----------------------------------------------------------------------
-    handoff = _should_handoff(answer, has_conflict, order_result)
+    handoff_reason = determine_handoff_reason(user_message, has_conflict, order_result)
+    handoff = handoff_reason is not None
 
     # -----------------------------------------------------------------------
     # Step 8: Build sources list
@@ -358,12 +416,15 @@ def run_turn(
         ],
         "response": answer[:500],  # truncate for log safety
         "handoff": handoff,
+        "handoff_reason": handoff_reason,
     })
 
     return {
         "answer": answer,
         "sources": sources,
         "handoff": handoff,
+        "handoff_reason": handoff_reason,
         "tool_used": tool_used,
+        "tool_calls": tool_calls,
         "trace_id": trace_id,
     }
