@@ -61,16 +61,40 @@ def _get_pipeline():
         import time as _time
         from transformers import pipeline as hf_pipeline
         _t = _time.perf_counter()
-        _pipeline = hf_pipeline(
-            "text-generation",
-            model=LLM_MODEL_NAME,
-            device=-1,          # -1 = CPU; avoids accelerate dependency
-            dtype="float32",    # replaces deprecated torch_dtype="auto"
-            trust_remote_code=True,
-        )
+        
+        model_to_load = LLM_MODEL_NAME
+        try:
+            _pipeline = hf_pipeline(
+                "text-generation",
+                model=model_to_load,
+                device=-1,          # -1 = CPU; avoids accelerate dependency
+                dtype="bfloat16",   # Use bfloat16 to optimize CPU memory usage and inference speed
+                trust_remote_code=True,
+            )
+        except Exception as e:
+            import gc
+            gc.collect()
+            from app.config import DEVELOPMENT_FALLBACK_LLM_MODEL_NAME
+            if model_to_load != DEVELOPMENT_FALLBACK_LLM_MODEL_NAME:
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "Failed to load model %s: %s. Falling back to %s in bfloat16.",
+                    model_to_load, str(e), DEVELOPMENT_FALLBACK_LLM_MODEL_NAME
+                )
+                model_to_load = DEVELOPMENT_FALLBACK_LLM_MODEL_NAME
+                _pipeline = hf_pipeline(
+                    "text-generation",
+                    model=model_to_load,
+                    device=-1,
+                    dtype="bfloat16",
+                    trust_remote_code=True,
+                )
+            else:
+                raise e
+
         _load_secs = _time.perf_counter() - _t
         import logging as _logging
-        _logging.getLogger(__name__).info("LLM pipeline loaded in %.1fs (%s)", _load_secs, LLM_MODEL_NAME)
+        _logging.getLogger(__name__).info("LLM pipeline loaded in %.1fs (%s)", _load_secs, model_to_load)
     return _pipeline
 
 
