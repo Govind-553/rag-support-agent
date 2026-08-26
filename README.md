@@ -102,8 +102,6 @@ python -c "from app.rag.loader import load_knowledge_base; from app.rag.index im
 
 ### Start the app
 
-Either command works:
-
 ```bash
 uvicorn app.main:app --reload
 ```
@@ -180,6 +178,10 @@ Good smoke tests:
 - `Please check ORD-9999.`
 - `Can I put the Breeze Tumbler in the dishwasher?`
 
-## 12. Bug Diary
+## 🎥 Video Demonstration
+
+[▶️ Watch the Project Demo](https://drive.google.com/file/d/1l8XUyIxi670tef36hgOcHnxAXlm_U0Lx/view?usp=drive_link)
+
+## 11. Bug Diary
 
 See [BUG_DIARY.md](BUG_DIARY.md).
