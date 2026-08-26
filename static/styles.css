@@ -221,3 +221,31 @@ textarea#input::placeholder { color: var(--text-muted); }
 }
 .btn-send:hover { background: #5a53e0; }
 .btn-send:disabled { background: var(--accent-soft); cursor: default; }
+
+/* ---- Mobile responsive ---- */
+@media (max-width: 600px) {
+  .shell {
+    border-left: none;
+    border-right: none;
+  }
+  .header {
+    padding: 10px 14px;
+  }
+  .logo-mark {
+    width: 32px; height: 32px;
+    font-size: 10px;
+  }
+  .brand { font-size: 14px; }
+  .tagline { font-size: 10px; }
+  .btn-new { padding: 5px 10px; font-size: 12px; }
+  .messages {
+    padding: 12px;
+    gap: 12px;
+  }
+  .message { max-width: 92%; }
+  .bubble { padding: 10px 12px; font-size: 13px; }
+  .meta { font-size: 10px; }
+  .composer { padding: 10px 12px; gap: 8px; }
+  textarea#input { padding: 8px 10px; font-size: 13px; }
+  .btn-send { width: 36px; height: 36px; font-size: 16px; border-radius: 8px; }
+}

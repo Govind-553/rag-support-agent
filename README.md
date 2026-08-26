@@ -40,7 +40,7 @@ flowchart TD
 
 ## 4. Tech Stack
 
-- Python 3.11+
+- Python 
 - FastAPI
 - Uvicorn
 - Qwen/Qwen2.5-3B-Instruct

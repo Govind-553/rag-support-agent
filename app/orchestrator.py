@@ -19,9 +19,10 @@ Security model:
 
 import json
 import re
+import time
 from typing import List, Optional, Dict, Any, Tuple
 
-from app.config import LLM_MODEL_NAME, KNOWLEDGE_BASE_DIR, INDEX_DIR
+from app.config import LLM_MODEL_NAME, KNOWLEDGE_BASE_DIR, INDEX_DIR, LLM_MAX_NEW_TOKENS
 from app.models import SourceCitation
 from app.session import Session
 from app.tools.order_lookup import extract_order_id, lookup_order
@@ -57,15 +58,19 @@ _pipeline = None
 def _get_pipeline():
     global _pipeline
     if _pipeline is None:
+        import time as _time
         from transformers import pipeline as hf_pipeline
+        _t = _time.perf_counter()
         _pipeline = hf_pipeline(
             "text-generation",
             model=LLM_MODEL_NAME,
             device=-1,          # -1 = CPU; avoids accelerate dependency
-            torch_dtype="auto",
+            dtype="float32",    # replaces deprecated torch_dtype="auto"
             trust_remote_code=True,
-            max_new_tokens=512,
         )
+        _load_secs = _time.perf_counter() - _t
+        import logging as _logging
+        _logging.getLogger(__name__).info("LLM pipeline loaded in %.1fs (%s)", _load_secs, LLM_MODEL_NAME)
     return _pipeline
 
 
@@ -155,8 +160,8 @@ def _call_llm(system: str, history_text: str, context_block: str, tool_block: st
 
     messages.append({"role": "user", "content": user_content})
 
-    # Generate
-    output = pipe(messages, max_new_tokens=512, do_sample=False)
+    # Generate — deterministic greedy; no sampling params needed
+    output = pipe(messages, max_new_tokens=LLM_MAX_NEW_TOKENS, do_sample=False)
 
     # Extract generated text
     generated = output[0]["generated_text"]
@@ -268,6 +273,7 @@ def run_turn(
     order_result = None
     sources: List[SourceCitation] = []
     tool_calls = []
+    _t_start = time.perf_counter()
 
     # -----------------------------------------------------------------------
     # Step 1: Detect if we need an order lookup (Routing context resolution)
@@ -313,7 +319,9 @@ def run_turn(
             query = f"{last_user} {user_message}"
 
     index = _get_index()
+    _t_rag = time.perf_counter()
     raw_results = index.search(query, k=10)
+    _t_rag_secs = round(time.perf_counter() - _t_rag, 3)
 
     # Apply precedence filter
     filtered_results = filter_authoritative_chunks(raw_results)
@@ -358,6 +366,7 @@ def run_turn(
     # -----------------------------------------------------------------------
     # Step 6: LLM call
     # -----------------------------------------------------------------------
+    _t_llm = time.perf_counter()
     answer = _call_llm(
         system=system,
         history_text=history_text,
@@ -365,6 +374,7 @@ def run_turn(
         tool_block=tool_block,
         user_message=user_message,
     )
+    _t_llm_secs = round(time.perf_counter() - _t_llm, 3)
 
     # If conflict was detected, prepend conflict message
     if has_conflict and conflict_msg:
@@ -417,6 +427,11 @@ def run_turn(
         "response": answer[:500],  # truncate for log safety
         "handoff": handoff,
         "handoff_reason": handoff_reason,
+        "timing_secs": {
+            "rag": _t_rag_secs,
+            "llm": _t_llm_secs,
+            "total": round(time.perf_counter() - _t_start, 3),
+        },
     })
 
     return {

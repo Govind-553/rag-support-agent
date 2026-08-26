@@ -32,6 +32,7 @@ EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-en-v1.5
 DEVELOPMENT_FALLBACK_LLM_MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
 INTENDED_SUBMISSION_LLM_MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
 LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", DEVELOPMENT_FALLBACK_LLM_MODEL_NAME)
+LLM_MAX_NEW_TOKENS = int(os.getenv("LLM_MAX_NEW_TOKENS", "192"))
 
 # Snapshot timestamp for cancellation/time window logic
 SNAPSHOT_AT = os.getenv("SNAPSHOT_AT", "2026-08-15T12:00:00Z")
